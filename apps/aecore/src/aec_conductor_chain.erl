@@ -38,6 +38,7 @@
         , has_header/2
         , insert_block/2
         , insert_header/2
+        , get_top_state_trees/1
         ]).
 
 %%%===================================================================
@@ -183,6 +184,10 @@ insert_header(Header, State) ->
             {ok, State#state{chain_state = ChainState2}};
         {error,_Reason} = E -> E
     end.
+
+get_top_state_trees(State) ->
+    ChainState1 = State#state.chain_state,
+    aec_chain_state:get_top_state_trees(ChainState1).
 
 %%%===================================================================
 %%% Handle persistence
