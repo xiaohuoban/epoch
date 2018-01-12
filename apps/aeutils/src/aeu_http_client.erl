@@ -1,10 +1,13 @@
 -module(aeu_http_client).
 
 %% API
--export([request/4]).
+-export([request/3]).
+
+%% include generated code
+-include("../include/endpoints.hrl").
 
 
-request(BaseUri, Method, Endpoint, Params) ->
+request(BaseUri, OperationId, Params) ->
     Timeout = aeu_env:user_config_or_env(
                 [<<"http">>, <<"external">>,<<"request_timeout">>],
                 aehttp, http_request_timeout, 1000),
@@ -12,6 +15,7 @@ request(BaseUri, Method, Endpoint, Params) ->
                  [<<"http">>, <<"external">>, <<"connect_timeout">>],
                  aehttp, http_connect_timeout, min(Timeout, 1000)),
     HTTPOptions = [{timeout, Timeout}, {connect_timeout, CTimeout}],
+    #{path := Endpoint, method := Method} = operation(OperationId),
     request(BaseUri, Method, Endpoint, Params, [], HTTPOptions, []).
 
 request(BaseUri, get, Endpoint, Params, Header, HTTPOptions, Options) ->
