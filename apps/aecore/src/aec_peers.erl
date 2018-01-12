@@ -661,5 +661,3 @@ parse_uri(Uri) ->
 -spec uri_of_peer(peer()) -> http_uri:uri().
 uri_of_peer(#peer{host = Host, scheme = Scheme, port = Port}) ->
     aeu_requests:pp_uri({Scheme, Host, Port}).
-
-
