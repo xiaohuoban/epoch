@@ -58,20 +58,10 @@ process_http_return(R) ->
             Error
     end.
 
+-spec encode_get_params(map() | list({string(), string()})) -> iolist().
 encode_get_params(#{} = Ps) ->
     encode_get_params(maps:to_list(Ps));
-encode_get_params([{K,V}|T]) ->
-    ["?", [str(K),"=",uenc(V)
-           | [["&", str(K1), "=", uenc(V1)]
-              || {K1, V1} <- T]]];
-encode_get_params([]) ->
-    [].
-
-%% str(A) when is_atom(A) ->
-%%     atom_to_binary(A, latin1);
-str(S) when is_list(S); is_binary(S) ->
-    S.
-
-uenc(V) ->
-    http_uri:encode(V).
+encode_get_params(Params) when is_list(Params) ->
+    ["?", string:join( [ [http_uri:encode(K), "=" , http_uri:encode(V)] 
+                         || {K,V} <- Params ], "&" ) ].
 
