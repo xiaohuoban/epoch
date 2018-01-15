@@ -43,7 +43,7 @@
       keypair:
         dir: "keys"
         password: "{{ keys_password|default('secret') }}"
-      api_base_uri: http://{{ ansible_ssh_host }}:{{ config.http.external.port }}/v2
+    api_base_uri: http://{{ ansible_ssh_host }}:{{ config.http.external.port }}/v2
 
   tasks:
     - block:
