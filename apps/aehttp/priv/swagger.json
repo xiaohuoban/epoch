@@ -9,7 +9,7 @@
       "email" : "apiteam@aeternity.com"
     }
   },
-  "basePath" : "/v1",
+  "basePath" : "/v2",
   "tags" : [ {
     "name" : "external",
     "description" : "External API"

@@ -4,7 +4,7 @@
 %%%     HTTP request support.
 %%%     This module contains a function for each HTTP endpoint with 
 %%%     as arguments
-%%%     1) the BaseUri (e.g. http://localhost:3013/v1/) in binary format
+%%%     1) the host (e.g. http://localhost:3013) in binary format
 %%%        to allow utf8 characters,
 %%%     2) the query parameters.
 %%%
