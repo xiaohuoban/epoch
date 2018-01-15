@@ -1,6 +1,6 @@
 # About this release
 
-[This release](https://github.com/aeternity/epoch/releases/tag/v0.4.1) is focused on stability of the testnet - the public test network of nodes.
+[This release](https://github.com/aeternity/epoch/releases/tag/v0.4.1) is focused on stability of the testnet - the public test network of nodes and introduces some API for apps usability build on top of it.
 
 Please follow the instructions below and let us know if you have any problems by [opening a ticket](https://github.com/aeternity/epoch/issues).
 
@@ -23,6 +23,8 @@ The macOS package has a hard dependency on OpenSSL v1.0.0 installed with [Homebr
 In case you have installed it in a non-default path, you could use a symlink to work around the issue.
 
 The user configuration is documented in the [wiki](https://github.com/aeternity/epoch/wiki/User-provided-configuration) though the instructions below contain easy-to-use examples.
+
+HTTP endpoints are documented in the [swagger.yaml](https://github.com/aeternity/epoch/blob/v0.4.1/config/swagger.yaml). A swagger.json version of the same documentation is present in the release: `lib/aehttp-0.1.0/priv/swagger.json`
 
 ## Join the testnet
 
@@ -76,7 +78,7 @@ The storage of the key pair by the node is basic:
 * A fresh key pair is generated if none is found in the configured location.
 
 You do not need to create a key pair yourself: the node will generate one (`keys` > `dir` parameter) in the configured location if none found there.
-After the node generates the key pair in the configured location, you should backup of that directory (and remember the password): if you destroy the node, you can setup a new node with the same account in order to lose the tokens you had obtained by mining on the chain.
+After the node generates the key pair in the configured location, you should back up that directory (and remember the password): if you destroy the node, you can setup a new node with the same account in order not to lose the tokens you had obtained by mining on the chain.
 You shall not share the private key (or the password) with anyone.
 
 Create the file `/tmp/node/epoch.yaml` with the following content (amend the `http` > `external` > `peer_address` parameter and `http` > `external` > `port` parameter with your actual values):
@@ -120,16 +122,7 @@ bin/epoch check_config epoch.yaml
 ```
 You shall read output like the following:
 ```
-Res = {ok,[{<<"chain">>,[{<<"db_path">>,<<"./my_db">>},{<<"persist">>,true}]},
-           {<<"http">>,
-            [{<<"external">>,
-              [{<<"peer_address">>,<<"http://1.2.3.4:8080/">>},
-               {<<"port">>,3003}]},
-             {<<"internal">>,[{<<"port">>,3103}]}]},
-           {<<"keys">>,[{<<"dir">>,<<"keys">>},{<<"password">>,<<"secret">>}]},
-           {<<"mining">>,[{<<"autostart">>,true}]},
-           {<<"peers">>,[<<"http://31.13.248.102:3013/">>]},
-           {<<"websocket">>,[{<<"internal">>,[{<<"port">>,3104}]}]}]}
+OK
 ```
 If the file is valid YAML but does not contain a valid configuration, it prints a helpful output.
 
@@ -154,7 +147,7 @@ curl http://127.0.0.1:3003/v1/top
 
 If the node is unresponsive, inspect the `log` directory for errors.
 
-Backup the key pair:
+Back up the key pair:
 ```
 cp -pr /tmp/node/keys ~/my_epoch_keys
 ```
@@ -256,6 +249,23 @@ curl http://127.0.0.1:3003/v1/top
 ```
 
 Verify that the height is the same; it may take a few minutes for your node to catch up with the testnet blockchain.
+
+#### Verify that node mines on same chain as the testnet
+After the node is successfully connected to the testnet, you could verify that it is mining on the same chain as the rest of the network.
+You can validate it observing the `hash` of the `/top` of the remote nodes:
+```
+curl http://31.13.248.102:3013/v1/top
+{"hash":"HcebFAby1g7uLgj5KEp3jBsFnKXYEthrP5+r5P2BE9Q=","height":...}
+```
+
+This is the hash of the block being at the top of the chain of the node and it should be same as the hash in `prev_hash` of the block you're currently mining:
+```
+curl http://localhost:3113/v1/block/pending
+{"data_schema":"BlockWithTxsHashes","height":... ,"prev_hash":"HcebFAby1g7uLgj5KEp3jBsFnKXYEthrP5+r5P2BE9Q=", ...}
+```
+Height would be +1 of what is in the `/top` of the remote node but this is not
+as strong guarantee as the `prev_hash`.
+
 
 ### Manage account
 
