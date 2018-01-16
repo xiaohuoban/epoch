@@ -16,7 +16,7 @@
         ]).
 
 %% API called from strongly connected component aec_peers
--export([schedule_ping/2]).
+-export([schedule_ping/1]).
 
 %% API called from both aehttp_dispatch_ext and aeu_requests
 -export([local_ping_object/0,
@@ -119,8 +119,8 @@ server_get_missing_blocks(Uri) ->
 fetch_mempool(Uri) ->
     gen_server:cast(?MODULE, {fetch_mempool, Uri}).
 
-schedule_ping(Peer, PingF) when is_function(PingF, 1) ->
-    gen_server:cast(?MODULE, {schedule_ping, Peer, PingF}).
+schedule_ping(Uri) ->
+    gen_server:cast(?MODULE, {schedule_ping, Uri}).
 
 %%%=============================================================================
 %%% gen_server functions
@@ -156,8 +156,8 @@ handle_cast({server_get_missing, Uri}, State) ->
 handle_cast({fetch_mempool, Uri}, State) ->
     jobs:enqueue(sync_jobs, {fetch_mempool, Uri}),
     {noreply, State};
-handle_cast({schedule_ping, Peer, PingF}, State) ->
-    jobs:enqueue(sync_jobs, {ping, Peer, PingF}),
+handle_cast({schedule_ping, Uri}, State) ->
+    jobs:enqueue(sync_jobs, {ping, Uri}),
     {noreply, State};
 handle_cast(_, State) ->
     {noreply, State}.
@@ -206,14 +206,57 @@ process_job([{_T, Job}]) ->
             do_server_get_missing(Uri);
         {fetch_mempool, Uri} ->
             do_fetch_mempool(Uri);
-        {ping, Peer, PingF} ->
-            PingF(Peer);
+        {ping, Uri} ->
+            ping_peer(Uri);
         _Other ->
             lager:debug("unknown job", [])
     end.
 
 enqueue(Op, Msg) ->
     [ jobs:enqueue(sync_jobs, {Op, Msg, Uri}) || Uri <- aec_peers:get_random(all) ].
+
+ping_peer(Uri) ->
+    %% Don't ping until our own HTTP endpoint is up. This is not strictly
+    %% needed for the ping itself, but given that a ping can quickly
+    %% lead to a greater discovery, we should be prepared to handle pings
+    %% ourselves at this point.
+    case await_aehttp() of
+        ok ->
+            LocalPingObj = local_ping_object(),
+            Res = aeu_requests:ping(Uri, LocalPingObj),
+            lager:debug("ping result (~p): ~p", [Uri, Res]),
+            case Res of
+                {ok, RemotePingObj, RemotePeers} ->
+                    case compare_ping_objects(Uri, LocalPingObj, RemotePingObj) of
+                        ok ->
+                            aec_peers:log_good_ping(Uri),
+                            aec_peers:add_and_ping_peers(RemotePeers);
+                        {error, different_genesis_blocks} ->
+                            aec_peers:block_peer(Uri)
+                    end;
+                {error, protocol_violation} ->
+                    aec_peers:block_peer(Uri);
+                _ ->
+                    %% If we ping a peer with wrong API version, time out in aue_request 
+                    %% and Peer is errored until it upgrades/downgrades to the same version.
+                    aec_peers:log_ping_error(Uri)
+            end;
+        {error, timeout} ->
+            lager:debug("timeout waiting for aehttp - no ping (~p) will retry", [Uri]),
+            ping_peer(Uri)
+    end.
+
+%% The gproc name below is registered in the start function of
+%% aehttp_app, and serves as a synch point. The timeout is hopefully
+%% large enough to reflect only error conditions. Expected wait time
+%% should be a fraction of a second, if any.
+await_aehttp() ->
+    try
+      gproc:await({n,l,{epoch,app,aehttp}}, 10000), % should (almost) never timeout
+      ok
+    catch error:{_Reason, _Args} ->
+      {error, timeout}
+    end.
 
 do_forward_block(Block, Uri) ->
     Res = aeu_requests:send_block(Uri, Block),
