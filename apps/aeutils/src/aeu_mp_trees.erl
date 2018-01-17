@@ -185,7 +185,7 @@ int_delete(Key1, {leaf, Key2, _} = _Node, DB) ->
     ?debug("~w: ~s ~s\n", [?LINE, hexstring(Key1), pp_node(_Node, DB)]),
     case Key1 =:= Key2 of
         true  -> {<<>>, DB};
-        false -> throw({unchanged, Key1, Key2})
+        false -> throw(unchanged)
     end;
 int_delete(Key1, {ext, Key2, Hash} = _Node, DB) ->
     ?debug("~w: ~s ~s\n", [?LINE, hexstring(Key1), pp_node(_Node, DB)]),
