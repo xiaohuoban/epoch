@@ -132,9 +132,16 @@ type() ->
     ?NAME_PRECLAIM_TX_TYPE.
 
 -spec for_client(preclaim_tx()) -> map().
-for_client(#ns_preclaim_tx{}) ->
-    %% TODO: Implement it, this is something for HTTP API
-    #{}.
+for_client(#ns_preclaim_tx{account    = AccountPubKey,
+                           nonce      = Nonce,
+                           commitment = Commitment,
+                           fee        = Fee}) ->
+    #{<<"type">>       => <<"NamePreclaimTxObject">>, % swagger schema name
+      <<"vsn">>        => version(),
+      <<"account">>    => aec_base58c:encode(account_pubkey, AccountPubKey),
+      <<"nonce">>      => Nonce,
+      <<"commitment">> => aec_base58c:encode(commitment, Commitment),
+      <<"fee">>        => Fee}.
 
 %%%===================================================================
 %%% Getters

@@ -205,6 +205,31 @@ get_operations() ->
             method => <<"GET">>,
             handler => 'swagger_internal_handler'
         },
+        'PostNameClaimTx' => #{
+            path => "/v2/name-claim-tx",
+            method => <<"POST">>,
+            handler => 'swagger_internal_handler'
+        },
+        'PostNamePreclaimTx' => #{
+            path => "/v2/name-preclaim-tx",
+            method => <<"POST">>,
+            handler => 'swagger_internal_handler'
+        },
+        'PostNameRevokeTx' => #{
+            path => "/v2/name-revoke-tx",
+            method => <<"POST">>,
+            handler => 'swagger_internal_handler'
+        },
+        'PostNameTransferTx' => #{
+            path => "/v2/name-transfer-tx",
+            method => <<"POST">>,
+            handler => 'swagger_internal_handler'
+        },
+        'PostNameUpdateTx' => #{
+            path => "/v2/name-update-tx",
+            method => <<"POST">>,
+            handler => 'swagger_internal_handler'
+        },
         'PostOracleQueryTx' => #{
             path => "/v2/oracle-query-tx",
             method => <<"POST">>,

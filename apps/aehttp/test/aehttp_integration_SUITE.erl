@@ -91,7 +91,9 @@
     block_txs_list_by_height/1,
     block_txs_list_by_hash/1,
     block_txs_list_by_height_invalid_range/1,
-    block_txs_list_by_hash_invalid_range/1
+    block_txs_list_by_hash_invalid_range/1,
+
+    ns_post_preclaim_tx/1
    ]).
 
 -include_lib("common_test/include/ct.hrl").
@@ -178,7 +180,9 @@ groups() ->
        block_txs_list_by_height,
        block_txs_list_by_hash,
        block_txs_list_by_height_invalid_range,
-       block_txs_list_by_hash_invalid_range
+       block_txs_list_by_hash_invalid_range,
+
+       ns_post_preclaim_tx
       ]}
     ].
 
@@ -1237,6 +1241,44 @@ block_txs_list_by_hash_invalid_range(_Config) ->
         ]),
     ok.
 
+ns_post_preclaim_tx(_Config) ->
+    %% Check mempool empty
+    {ok, []} = rpc(aec_tx_pool, peek, [infinity]),
+
+    %% Try to submit preclaim tx with empty account
+    CHash = random_hash(),
+
+    PreclaimFee = 3,
+    MineReward = rpc(aec_governance, block_mine_reward, []),
+    {ok, 404, #{<<"reason">> := <<"No funds in an account">>}} =
+        post_name_preclaim_tx(CHash, PreclaimFee),
+
+    %% Check mempool still empty
+    {ok, []} = rpc(aec_tx_pool, peek, [infinity]),
+
+    %% Mine 10 blocks to get some funds
+    aecore_suite_utils:mine_blocks(aecore_suite_utils:node_name(?NODE), 10),
+
+    {ok, 200, #{<<"balance">> := AccountBalance}} = get_balance(),
+
+    %% Resubmit preclaim tx
+    {ok, 200, _} = post_name_preclaim_tx(CHash, PreclaimFee),
+
+    %% Check preclaim tx present in mempool
+    {ok, NodeTxs} = rpc(aec_tx_pool, peek, [infinity]),
+    1             = length(NodeTxs),
+    [PreclaimTx]  = NodeTxs,
+    CHash         = aens_preclaim_tx:commitment(aec_tx_sign:data(PreclaimTx)),
+
+    %% Mine a block and check mempool empty again
+    aecore_suite_utils:mine_blocks(aecore_suite_utils:node_name(?NODE), 1),
+    {ok, []} = rpc(aec_tx_pool, peek, [infinity]),
+
+    %% Check fee taken from account, then mine reward and fee added to account
+    {ok, 200, #{<<"balance">> := UpdatedBalance}} = get_balance(),
+    UpdatedBalance = AccountBalance - PreclaimFee + MineReward + PreclaimFee,
+    ok.
+
 %% ============================================================
 %% HTTP Requests 
 %% ============================================================
@@ -1268,6 +1310,12 @@ post_spend_tx(Recipient, Amount, Fee) ->
                                          account_pubkey, Recipient),
                    amount => Amount,
                    fee => Fee}).
+
+post_name_preclaim_tx(Commitment, Fee) ->
+    Host = internal_address(),
+    http_request(Host, post, "name-preclaim-tx",
+                 #{commitment => aec_base58c:encode(commitment, Commitment),
+                   fee        => Fee}).
 
 get_balance() ->
     Host = external_address(),

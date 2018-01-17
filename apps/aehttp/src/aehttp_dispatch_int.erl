@@ -142,6 +142,30 @@ handle_request('PostOracleUnsubscribe', _Req, _Context) ->
     %% TODO: Implement me
     {501, [], #{}};
 
+handle_request('PostNamePreclaimTx', #{'NamePreclaimTx' := NamePreclaimTxObj}, _Context) ->
+    case get_local_pubkey_with_next_nonce() of
+        {ok, PubKey, Nonce} ->
+            #{<<"commitment">> := Commitment,
+              <<"fee">>        := Fee} = NamePreclaimTxObj,
+            case aec_base58c:safe_decode(commitment, Commitment) of
+                {ok, DecodedCommitment} ->
+                    {ok, PreclaimTx} =
+                        aens_preclaim_tx:new(
+                          #{account    => PubKey,
+                            nonce      => Nonce,
+                            commitment => DecodedCommitment,
+                            fee        => Fee}),
+                    sign_and_push_to_mempool(PreclaimTx),
+                    {200, [], #{commitment => Commitment}};
+                {error, _Reason} ->
+                    {400, [], #{reason => <<"Invalid commitment hash">>}}
+            end;
+        {error, account_not_found} ->
+            {404, [], #{reason => <<"No funds in an account">>}};
+        {error, key_not_found} ->
+            {400, [], #{reason => <<"Keys not configured">>}}
+    end;
+
 handle_request('GetPubKey', _, _Context) ->
     case aec_keys:pubkey() of
         {ok, Pubkey} ->
