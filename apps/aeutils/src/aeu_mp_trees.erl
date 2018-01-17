@@ -208,30 +208,34 @@ int_delete(Key, {branch, Branch} = _Node, DB) ->
     ?debug("~w: ~s ~s\n", [?LINE, hexstring(Key), pp_node(_Node, DB)]),
     case Key of
         <<>> when element(17, Branch) =:= <<>> -> throw(unchanged);
-        <<>> -> branch(setelement(17, Branch, <<>>), DB);
+        <<>> -> try_reduce_branch(setelement(17, Branch, <<>>), DB);
         <<Next:4, Rest/bits>> ->
             case int_delete(Rest, decode_node(element(Next + 1, Branch), DB), DB) of
                 {<<>>, DB1} ->
-                    Branch1 = setelement(Next + 1, Branch, <<>>),
-                    case get_singleton_branch(Branch1) of
-                        error     -> branch(Branch1, DB1);
-                        {17, Val} -> leaf(<<>>, Val, DB1);
-                        {Element, NextNode} ->
-                            case decode_node(NextNode, DB1) of
-                                {leaf, Path, Val} ->
-                                    Path1 = <<(Element-1):4, Path/bits>>,
-                                    leaf(Path1, Val, DB1);
-                                {ext, Path, Val} ->
-                                    Path1 = <<(Element-1):4, Path/bits>>,
-                                    extension(Path1, Val, DB1);
-                                {branch,_B} ->
-                                    extension(<<Next:4>>, NextNode, DB1)
-                            end
-                    end;
+                    try_reduce_branch(setelement(Next + 1, Branch, <<>>), DB1);
                 {NewNode, DB1} ->
                     branch(setelement(Next + 1, Branch, NewNode), DB1)
             end
     end.
+
+try_reduce_branch(Branch, DB) ->
+    case get_singleton_branch(Branch) of
+        error     -> branch(Branch, DB);
+        none      -> error({empty_branch, Branch});
+        {17, Val} -> leaf(<<>>, Val, DB);
+        {Element, NextNode} ->
+            case decode_node(NextNode, DB) of
+                {leaf, Path, Val} ->
+                    Path1 = <<(Element-1):4, Path/bits>>,
+                    leaf(Path1, Val, DB);
+                {ext, Path, Val} ->
+                    Path1 = <<(Element-1):4, Path/bits>>,
+                    extension(Path1, Val, DB);
+                {branch,_B} ->
+                    extension(<<(Element-1):4>>, NextNode, DB)
+            end
+    end.
+
 
 get_singleton_branch(Branch) ->
     get_singleton_branch(Branch, 1, none).
