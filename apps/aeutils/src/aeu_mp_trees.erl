@@ -1,7 +1,7 @@
 %%%-------------------------------------------------------------------
 %%% @copyright (C) 2017, Aeternity Anstalt
 %%% @doc Merkle Patricia Trees
-%%    Based on the description in https://github.com/ethereum/wiki/wiki/Patricia-Tree
+%%%
 %%% @end
 %%%-------------------------------------------------------------------
 
@@ -28,8 +28,8 @@
 -type extension() :: {encoded_path(), hash()}.
 
 -type encoded_path() :: binary().
--type value()        :: term().
--type hash()         :: <<_:256>> | undefined.
+-type value()        :: binary(). %% TODO: 'Something that can be rlp encoded'
+-type hash()         :: <<_:256>> | <<>>.
 
 -record(mpt, { hash = <<>>
              }).
@@ -78,7 +78,9 @@ root_hash(#mpt{hash = H}) -> H.
 
 pp(#mpt{hash = Hash}, DB) ->
     io:format("Root: ~s\n", [hexstring(Hash)]),
-    lists:flatten([pp_tree(decode_node(Hash, DB), DB)]).
+    [io:format("~s\n", [S])
+     || S <- lists:flatten([pp_tree(decode_node(Hash, DB), DB)])],
+    ok.
 
 %%%===================================================================
 %%% Internal functions
@@ -113,20 +115,27 @@ int_get(Path, {Type, NodePath, NodeVal}, DB) when Type =:= ext; Type =:= leaf ->
 
 int_put(Key, Val, <<>>, DB) ->
     leaf(Key, Val, DB);
-int_put(Key, Val1, {leaf, Key,_Val2}, DB) -> %% Can be cached
-    leaf(Key, Val1, DB);
 int_put(Key1, Val1, {leaf, Key2, Val2}, DB) ->
     {Common, K1, K2} = find_common_path(Key1, Key2),
     case {K1, K2} of
+        {<<>>, <<>>} when Val1 =:= Val2 ->
+            %% The same key and the same value.
+            throw(unchanged);
+        {<<>>, <<>>} ->
+            %% The same key. Just update the value.
+            leaf(Key1, Val1, DB);
         {<<>>, <<K:4, Rest/bits>>} ->
+            %% We need a branch before the old leaf
             {L, DB1} = leaf(Rest, Val2, DB),
             {Branch, DB2} = new_branch([{K, L}], Val1, DB1),
             maybe_extension(Common, Branch, DB2);
         {<<K:4, Rest/bits>>, <<>>} ->
+            %% We need a branch before the new leaf
             {L, DB1} = leaf(Rest, Val1, DB),
             {Branch, DB2} = new_branch([{K, L}], Val2, DB1),
             maybe_extension(Common, Branch, DB2);
         {<<Next1:4, Rest1/bits>>, <<Next2:4, Rest2/bits>>} ->
+            %% We need a branch before both leaves
             {L1, DB1} = leaf(Rest1, Val1, DB),
             {L2, DB2} = leaf(Rest2, Val2, DB1),
             {Branch, DB3} = new_branch([{Next1, L1}, {Next2, L2}], <<>>, DB2),
@@ -134,7 +143,10 @@ int_put(Key1, Val1, {leaf, Key2, Val2}, DB) ->
     end;
 int_put(<<>> =_Key, Val, {branch, Branch}, DB) ->
     %% Update the value of the branch
-    branch(setelement(17, Branch, Val), DB);
+    case element(17, Branch) =:= Val of
+        true  -> throw(unchanged);
+        false -> branch(setelement(17, Branch, Val), DB)
+    end;
 int_put(<<Next:4, Rest/bits>>, Val, {branch, Branch}, DB) ->
     NextNode = decode_node(element(Next + 1, Branch), DB),
     {NewNode, DB1} = int_put(Rest, Val, NextNode, DB),
@@ -336,7 +348,8 @@ decode_node(Hash, DB) when byte_size(Hash) =:= 32 ->
         [_|_] = Branch ->
             {branch, list_to_tuple(Branch)}
     end.
-
+encode_node(<<>>, DB) ->
+    error(nil_has_no_encoding);
 encode_node(Node, DB) ->
     Rlp = aeu_rlp:encode(Node),
     case byte_size(Rlp) < 32 of
