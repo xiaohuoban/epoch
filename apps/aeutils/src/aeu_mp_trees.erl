@@ -55,10 +55,12 @@ get(Key, #mpt{hash = Hash}, DB) ->
 put(Key, <<>>, #mpt{} = Mpt, DB) when is_bitstring(Key), Key =/= <<>> ->
     delete(Key, Mpt, DB);
 put(Key, Val, #mpt{hash = Hash} = Mpt, DB) when is_bitstring(Key), Key =/= <<>> ->
-    {NewTree, DB1} = int_put(Key, Val, decode_node(Hash, DB), DB),
-    {Mpt#mpt{ hash = node_hash(NewTree)
-            },
-     DB1}.
+    try int_put(Key, Val, decode_node(Hash, DB), DB) of
+        {NewTree, DB1} ->
+            {NewHash, DB2} = force_encoded_node_to_hash(NewTree, DB1),
+            {Mpt#mpt{ hash = NewHash}, DB2}
+    catch throw:unchanged -> {Mpt, DB}
+    end.
 
 delete(Key, #mpt{hash = Hash} = Mpt, DB) when is_bitstring(Key) ->
     try int_delete(Key, decode_node(Hash, DB), DB) of
@@ -67,9 +69,8 @@ delete(Key, #mpt{hash = Hash} = Mpt, DB) when is_bitstring(Key) ->
                     },
              DB1};
         {NewTree, DB1} ->
-            {Mpt#mpt{ hash = node_hash(NewTree)
-                    },
-             DB1}
+            {NewHash, DB2} = force_encoded_node_to_hash(NewTree, DB1),
+            {Mpt#mpt{ hash = NewHash}, DB2}
     catch throw:unchanged -> {Mpt, DB}
     end.
 
